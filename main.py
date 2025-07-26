@@ -5,7 +5,7 @@ import mimetypes
 import os
 import sqlite3
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 # Third-party libraries
@@ -103,7 +103,9 @@ ERROR_PREFIXES = {
 }
 
 
-def log_and_format_error(function_name: str, error: Exception, prefix: str | None = None, **kwargs) -> str:
+def log_and_format_error(
+    function_name: str, error: Exception, prefix: str | None = None, **kwargs
+) -> str:
     """
     Centralized error handling function that logs the error and returns a formatted user-friendly message.
 
@@ -179,6 +181,30 @@ def format_message(message) -> dict[str, Any]:
     return result
 
 
+def get_sender_name(message: Any) -> str:
+    """Helper function to get sender name from a message.
+    
+    Args:
+        message: A Telethon Message object.
+        
+    Returns:
+        The sender's name as a string, or "Unknown" if not available.
+    """
+    if not message.sender:
+        return "Unknown"
+
+    # Check for group/channel title first
+    if hasattr(message.sender, "title") and message.sender.title:
+        return message.sender.title
+    if hasattr(message.sender, "first_name"):
+        # User sender
+        first_name = getattr(message.sender, "first_name", "") or ""
+        last_name = getattr(message.sender, "last_name", "") or ""
+        full_name = f"{first_name} {last_name}".strip()
+        return full_name if full_name else "Unknown"
+    return "Unknown"
+
+
 @mcp.tool()
 async def get_chats(page: int = 1, page_size: int = 20) -> str:
     """
@@ -222,7 +248,10 @@ async def get_messages(chat_id: int, page: int = 1, page_size: int = 20) -> str:
             return "No messages found for this page."
         lines = []
         for msg in messages:
-            lines.append(f"ID: {msg.id} | Date: {msg.date} | Message: {msg.message}")
+            sender_name = get_sender_name(msg)
+            lines.append(
+                f"ID: {msg.id} | {sender_name} | Date: {msg.date} | Message: {msg.message}"
+            )
         return "\n".join(lines)
     except Exception as e:
         return log_and_format_error(
@@ -343,7 +372,7 @@ async def list_messages(
             try:
                 from_date_obj = datetime.strptime(from_date, "%Y-%m-%d")
                 # Make it timezone aware by adding UTC timezone info
-                from_date_obj = from_date_obj.replace(tzinfo=timezone.utc)
+                from_date_obj = from_date_obj.replace(tzinfo=UTC)
             except ValueError:
                 return "Invalid from_date format. Use YYYY-MM-DD."
 
@@ -353,7 +382,7 @@ async def list_messages(
                 # Set to end of day and make timezone aware
                 to_date_obj = to_date_obj + timedelta(days=1, microseconds=-1)
                 # Add timezone info
-                to_date_obj = to_date_obj.replace(tzinfo=timezone.utc)
+                to_date_obj = to_date_obj.replace(tzinfo=UTC)
             except ValueError:
                 return "Invalid to_date format. Use YYYY-MM-DD."
 
@@ -380,15 +409,10 @@ async def list_messages(
 
         lines = []
         for msg in messages:
-            sender = ""
-            if msg.sender:
-                sender_name = getattr(msg.sender, "first_name", "") or getattr(
-                    msg.sender, "title", "Unknown"
-                )
-                sender = f"{sender_name} | "
-
+            sender_name = get_sender_name(msg)
+            message_text = msg.message or "[Media/No text]"
             lines.append(
-                f"ID: {msg.id} | {sender}Date: {msg.date} | Message: {msg.message or '[Media/No text]'}"
+                f"ID: {msg.id} | {sender_name} | Date: {msg.date} | Message: {message_text}"
             )
 
         return "\n".join(lines)
@@ -707,11 +731,7 @@ async def get_message_context(chat_id: int, message_id: int, context_size: int =
         all_messages.sort(key=lambda m: m.id)
         results = [f"Context for message {message_id} in chat {chat_id}:"]
         for msg in all_messages:
-            sender_name = "Unknown"
-            if msg.sender:
-                sender_name = getattr(msg.sender, "first_name", "") or getattr(
-                    msg.sender, "title", "Unknown"
-                )
+            sender_name = get_sender_name(msg)
             highlight = " [THIS MESSAGE]" if msg.id == message_id else ""
             results.append(
                 f"ID: {msg.id} | {sender_name} | {msg.date}{highlight}\n{msg.message or '[Media/No text]'}\n"
@@ -1977,7 +1997,13 @@ async def search_messages(chat_id: int, query: str, limit: int = 20) -> str:
     try:
         entity = await client.get_entity(chat_id)
         messages = await client.get_messages(entity, limit=limit, search=query)
-        return "\n".join([f"ID: {m.id} | {m.date} | {m.message}" for m in messages])
+        lines = []
+        for msg in messages:
+            sender_name = get_sender_name(msg)
+            lines.append(
+                f"ID: {msg.id} | {sender_name} | Date: {msg.date} | Message: {msg.message}"
+            )
+        return "\n".join(lines)
     except Exception as e:
         return log_and_format_error("search_messages", e, chat_id=chat_id, query=query, limit=limit)
 
@@ -2300,7 +2326,13 @@ async def get_history(chat_id: int, limit: int = 100) -> str:
     try:
         entity = await client.get_entity(chat_id)
         messages = await client.get_messages(entity, limit=limit)
-        return "\n".join([f"ID: {m.id} | {m.date} | {m.message}" for m in messages])
+        lines = []
+        for msg in messages:
+            sender_name = get_sender_name(msg)
+            lines.append(
+                f"ID: {msg.id} | {sender_name} | Date: {msg.date} | Message: {msg.message}"
+            )
+        return "\n".join(lines)
     except Exception as e:
         return log_and_format_error("get_history", e, chat_id=chat_id, limit=limit)
 
@@ -2375,9 +2407,14 @@ async def get_pinned_messages(chat_id: int) -> str:
         if not messages:
             return "No pinned messages found in this chat."
 
-        return "\n".join(
-            [f"ID: {m.id} | {m.date} | {m.message or '[Media/No text]'}" for m in messages]
-        )
+        lines = []
+        for msg in messages:
+            sender_name = get_sender_name(msg)
+            lines.append(
+                f"ID: {msg.id} | {sender_name} | Date: {msg.date} | Message: {msg.message or '[Media/No text]'}"
+            )
+
+        return "\n".join(lines)
     except Exception as e:
         logger.exception(f"get_pinned_messages failed (chat_id={chat_id})")
         return log_and_format_error("get_pinned_messages", e, chat_id=chat_id)
