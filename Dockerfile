@@ -12,15 +12,14 @@ ENV PYTHONUNBUFFERED=1
 # Install system dependencies if needed (e.g., for certain Python packages)
 # RUN apt-get update && apt-get install -y --no-install-recommends some-package && rm -rf /var/lib/apt/lists/*
 
+# Install uv
+RUN pip install --no-cache-dir --upgrade pip uv
+
 # Copy dependency definition files
-# If using Poetry:
-# COPY pyproject.toml poetry.lock* ./
-# RUN pip install --no-cache-dir poetry
-# RUN poetry config virtualenvs.create false && poetry install --no-dev --no-interaction --no-ansi
-# If using pip with requirements.txt:
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies using uv
+RUN uv pip install --system -r pyproject.toml
 
 # Copy the rest of the application code
 COPY main.py .

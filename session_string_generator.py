@@ -15,10 +15,11 @@ Requirements:
 """
 
 import os
-from telethon.sync import TelegramClient
-from telethon.sessions import StringSession
-from dotenv import load_dotenv
 import sys
+
+from dotenv import load_dotenv
+from telethon.sessions import StringSession
+from telethon.sync import TelegramClient
 
 # Load environment variables from .env file
 load_dotenv()
@@ -68,7 +69,7 @@ try:
         if choice.lower() == "y":
             try:
                 # Read the current .env file
-                with open(".env", "r") as file:
+                with open(".env") as file:
                     env_contents = file.readlines()
 
                 # Update or add the SESSION_STRING line

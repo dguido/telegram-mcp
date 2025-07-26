@@ -32,18 +32,22 @@ dependencies = [
     "telethon>=1.39.0"
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ty"
+]
+
 [project.urls]
 "Homepage" = "https://github.com/chigwell/telegram-mcp"
 "Bug Tracker" = "https://github.com/chigwell/telegram-mcp/issues"
 
-[tool.black]
-line-length = 99
-target-version = ['py311']
+[tool.ruff]
+line-length = 100
+target-version = "py311"
 
-[tool.flake8]
-ignore = ["E203", "E501", "W503"]
-max-line-length = 99
-max-complexity = 10
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "YTT", "ASYNC", "S", "B", "A", "C4", "DTZ", "T10", "EM", "ISC", "ICN", "PIE", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SIM", "TID", "ERA", "PD", "RUF"]
+ignore = ["E203", "E501"]
 exclude = [
     ".git",
     "__pycache__",
@@ -52,3 +56,4 @@ exclude = [
     "dist",
     "docs/source/conf.py",
 ]
+
