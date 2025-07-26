@@ -1,36 +1,31 @@
-import os
-import sys
-import json
-import time
 import asyncio
-import sqlite3
+import json
 import logging
 import mimetypes
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Union, Any
+import os
+import sqlite3
+import sys
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 # Third-party libraries
 import nest_asyncio
+import telethon.errors.rpcerrorlist
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from telethon import TelegramClient, functions, utils
 from telethon.sessions import StringSession
 from telethon.tl.types import (
-    User,
-    Chat,
     Channel,
+    ChannelParticipantsAdmins,
+    ChannelParticipantsKicked,
+    Chat,
     ChatAdminRights,
     ChatBannedRights,
-    ChannelParticipantsKicked,
-    ChannelParticipantsAdmins,
-    InputChatPhoto,
-    InputChatUploadedPhoto,
     InputChatPhotoEmpty,
-    InputPeerUser,
-    InputPeerChat,
-    InputPeerChannel,
+    InputChatUploadedPhoto,
+    User,
 )
-import telethon.errors.rpcerrorlist
 
 
 def json_serializer(obj):
@@ -45,9 +40,9 @@ def json_serializer(obj):
 
 load_dotenv()
 
-TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID"))
-TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
-TELEGRAM_SESSION_NAME = os.getenv("TELEGRAM_SESSION_NAME")
+TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID", "0"))
+TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "")
+TELEGRAM_SESSION_NAME = os.getenv("TELEGRAM_SESSION_NAME", "")
 
 # Check if a string session exists in environment, otherwise use file-based session
 SESSION_STRING = os.getenv("TELEGRAM_SESSION_STRING")
@@ -108,9 +103,7 @@ ERROR_PREFIXES = {
 }
 
 
-def log_and_format_error(
-    function_name: str, error: Exception, prefix: str = None, **kwargs
-) -> str:
+def log_and_format_error(function_name: str, error: Exception, prefix: str | None = None, **kwargs) -> str:
     """
     Centralized error handling function that logs the error and returns a formatted user-friendly message.
 
@@ -145,7 +138,7 @@ def log_and_format_error(
     return f"An error occurred (code: {error_code}). Check mcp_errors.log for details."
 
 
-def format_entity(entity) -> Dict[str, Any]:
+def format_entity(entity) -> dict[str, Any]:
     """Helper function to format entity information consistently."""
     result = {"id": entity.id}
 
@@ -168,7 +161,7 @@ def format_entity(entity) -> Dict[str, Any]:
     return result
 
 
-def format_message(message) -> Dict[str, Any]:
+def format_message(message) -> dict[str, Any]:
     """Helper function to format message information consistently."""
     result = {
         "id": message.id,
@@ -325,9 +318,9 @@ async def get_contact_ids() -> str:
 async def list_messages(
     chat_id: int,
     limit: int = 20,
-    search_query: str = None,
-    from_date: str = None,
-    to_date: str = None,
+    search_query: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
 ) -> str:
     """
     Retrieve messages with optional filters.
@@ -350,17 +343,9 @@ async def list_messages(
             try:
                 from_date_obj = datetime.strptime(from_date, "%Y-%m-%d")
                 # Make it timezone aware by adding UTC timezone info
-                # Use datetime.timezone.utc for Python 3.9+ or import timezone directly for 3.13+
-                try:
-                    # For Python 3.9+
-                    from_date_obj = from_date_obj.replace(tzinfo=datetime.timezone.utc)
-                except AttributeError:
-                    # For Python 3.13+
-                    from datetime import timezone
-
-                    from_date_obj = from_date_obj.replace(tzinfo=timezone.utc)
+                from_date_obj = from_date_obj.replace(tzinfo=timezone.utc)
             except ValueError:
-                return f"Invalid from_date format. Use YYYY-MM-DD."
+                return "Invalid from_date format. Use YYYY-MM-DD."
 
         if to_date:
             try:
@@ -368,14 +353,9 @@ async def list_messages(
                 # Set to end of day and make timezone aware
                 to_date_obj = to_date_obj + timedelta(days=1, microseconds=-1)
                 # Add timezone info
-                try:
-                    to_date_obj = to_date_obj.replace(tzinfo=datetime.timezone.utc)
-                except AttributeError:
-                    from datetime import timezone
-
-                    to_date_obj = to_date_obj.replace(tzinfo=timezone.utc)
+                to_date_obj = to_date_obj.replace(tzinfo=timezone.utc)
             except ValueError:
-                return f"Invalid to_date format. Use YYYY-MM-DD."
+                return "Invalid to_date format. Use YYYY-MM-DD."
 
         # Prepare filter parameters
         params = {}
@@ -417,7 +397,7 @@ async def list_messages(
 
 
 @mcp.tool()
-async def list_chats(chat_type: str = None, limit: int = 20) -> str:
+async def list_chats(chat_type: str | None = None, limit: int = 20) -> str:
     """
     List available chats with metadata.
 
@@ -470,7 +450,7 @@ async def list_chats(chat_type: str = None, limit: int = 20) -> str:
             results.append(chat_info)
 
         if not results:
-            return f"No chats found matching the criteria."
+            return "No chats found matching the criteria."
 
         return "\n".join(results)
     except Exception as e:
@@ -497,9 +477,7 @@ async def get_chat(chat_id: int) -> str:
 
         if hasattr(entity, "title"):
             result.append(f"Title: {entity.title}")
-            chat_type = (
-                "Channel" if is_channel and getattr(entity, "broadcast", False) else "Group"
-            )
+            chat_type = "Channel" if is_channel and getattr(entity, "broadcast", False) else "Group"
             if is_channel and getattr(entity, "megagroup", False):
                 chat_type = "Supergroup"
             elif is_chat:
@@ -520,7 +498,7 @@ async def get_chat(chat_id: int) -> str:
             if entity.last_name:
                 name += f" {entity.last_name}"
             result.append(f"Name: {name}")
-            result.append(f"Type: User")
+            result.append("Type: User")
             if entity.username:
                 result.append(f"Username: @{entity.username}")
             if entity.phone:
@@ -550,7 +528,6 @@ async def get_chat(chat_id: int) -> str:
                     result.append(f"Message: {last_msg.message or '[Media/No text]'}")
         except Exception as diag_ex:
             logger.warning(f"Could not get dialog info for {chat_id}: {diag_ex}")
-            pass
 
         return "\n".join(result)
     except Exception as e:
@@ -774,9 +751,8 @@ async def add_contact(phone: str, first_name: str, last_name: str = "") -> str:
         )
         if result.imported:
             return f"Contact {first_name} {last_name} added successfully."
-        else:
-            return f"Contact not added. Response: {str(result)}"
-    except (ImportError, AttributeError) as type_err:
+        return f"Contact not added. Response: {result!s}"
+    except (ImportError, AttributeError):
         # Try alternative approach using raw API
         try:
             result = await client(
@@ -793,8 +769,7 @@ async def add_contact(phone: str, first_name: str, last_name: str = "") -> str:
             )
             if hasattr(result, "imported") and result.imported:
                 return f"Contact {first_name} {last_name} added successfully (alt method)."
-            else:
-                return f"Contact not added. Alternative method response: {str(result)}"
+            return f"Contact not added. Alternative method response: {result!s}"
         except Exception as alt_e:
             logger.exception(f"add_contact (alt method) failed (phone={phone})")
             return log_and_format_error("add_contact", alt_e, phone=phone)
@@ -892,27 +867,25 @@ async def create_group(title: str, user_ids: list) -> str:
             if hasattr(result, "chats") and result.chats:
                 created_chat = result.chats[0]
                 return f"Group created with ID: {created_chat.id}"
-            elif hasattr(result, "chat") and result.chat:
+            if hasattr(result, "chat") and result.chat:
                 return f"Group created with ID: {result.chat.id}"
-            elif hasattr(result, "chat_id"):
+            if hasattr(result, "chat_id"):
                 return f"Group created with ID: {result.chat_id}"
-            else:
-                # If we can't determine the chat ID directly from the result
-                # Try to find it in recent dialogs
-                await asyncio.sleep(1)  # Give Telegram a moment to register the new group
-                dialogs = await client.get_dialogs(limit=5)  # Get recent dialogs
-                for dialog in dialogs:
-                    if dialog.title == title:
-                        return f"Group created with ID: {dialog.id}"
+            # If we can't determine the chat ID directly from the result
+            # Try to find it in recent dialogs
+            await asyncio.sleep(1)  # Give Telegram a moment to register the new group
+            dialogs = await client.get_dialogs(limit=5)  # Get recent dialogs
+            for dialog in dialogs:
+                if dialog.title == title:
+                    return f"Group created with ID: {dialog.id}"
 
-                # If we still can't find it, at least return success
-                return f"Group created successfully. Please check your recent chats for '{title}'."
+            # If we still can't find it, at least return success
+            return f"Group created successfully. Please check your recent chats for '{title}'."
 
         except Exception as create_err:
             if "PEER_FLOOD" in str(create_err):
                 return "Error: Cannot create group due to Telegram limits. Try again later."
-            else:
-                raise  # Let the outer exception handler catch it
+            raise  # Let the outer exception handler catch it
     except Exception as e:
         logger.exception(f"create_group failed (title={title}, user_ids={user_ids})")
         return log_and_format_error("create_group", e, title=title, user_ids=user_ids)
@@ -995,16 +968,15 @@ async def leave_chat(chat_id: int) -> str:
                 me = await client.get_me(input_peer=True)
                 await client(
                     functions.messages.DeleteChatUserRequest(
-                        chat_id=entity.id, user_id=me  # Use the entity ID directly
+                        chat_id=entity.id,
+                        user_id=me,  # Use the entity ID directly
                     )
                 )
                 chat_name = getattr(entity, "title", str(chat_id))
                 return f"Left basic group {chat_name} (ID: {chat_id})."
             except Exception as chat_err:
                 # If the above fails, try the second approach
-                logger.warning(
-                    f"First leave attempt failed: {chat_err}, trying alternative method"
-                )
+                logger.warning(f"First leave attempt failed: {chat_err}, trying alternative method")
 
                 try:
                     # Alternative approach - sometimes this works better
@@ -1038,7 +1010,7 @@ async def leave_chat(chat_id: int) -> str:
             return log_and_format_error(
                 "leave_chat",
                 Exception(
-                    f"Error leaving chat: This appears to be a channel/supergroup. Please check the chat ID and try again."
+                    "Error leaving chat: This appears to be a channel/supergroup. Please check the chat ID and try again."
                 ),
                 chat_id=chat_id,
             )
@@ -1181,8 +1153,7 @@ async def get_privacy_settings() -> str:
         except TypeError as e:
             if "TLObject was expected" in str(e):
                 return "Error: Privacy settings API call failed due to type mismatch. This is likely a version compatibility issue with Telethon."
-            else:
-                raise
+            raise
     except Exception as e:
         logger.exception("get_privacy_settings failed")
         return log_and_format_error("get_privacy_settings", e)
@@ -1203,13 +1174,12 @@ async def set_privacy_settings(
     try:
         # Import needed types
         from telethon.tl.types import (
-            InputPrivacyKeyStatusTimestamp,
             InputPrivacyKeyPhoneNumber,
             InputPrivacyKeyProfilePhoto,
+            InputPrivacyKeyStatusTimestamp,
+            InputPrivacyValueAllowAll,
             InputPrivacyValueAllowUsers,
             InputPrivacyValueDisallowUsers,
-            InputPrivacyValueAllowAll,
-            InputPrivacyValueDisallowAll,
         )
 
         # Map the simplified keys to their corresponding input types
@@ -1268,15 +1238,12 @@ async def set_privacy_settings(
 
         # Apply the privacy settings
         try:
-            result = await client(
-                functions.account.SetPrivacyRequest(key=privacy_key, rules=rules)
-            )
+            result = await client(functions.account.SetPrivacyRequest(key=privacy_key, rules=rules))
             return f"Privacy settings for {key} updated successfully."
         except TypeError as type_err:
             if "TLObject was expected" in str(type_err):
                 return "Error: Privacy settings API call failed due to type mismatch. This is likely a version compatibility issue with Telethon."
-            else:
-                raise
+            raise
     except Exception as e:
         logger.exception(f"set_privacy_settings failed (key={key})")
         return log_and_format_error("set_privacy_settings", e, key=key)
@@ -1725,21 +1692,13 @@ async def join_chat_by_link(link: str) -> str:
 
         # Try checking the invite before joining
         try:
-            from telethon.errors import (
-                InviteHashExpiredError,
-                InviteHashInvalidError,
-                UserAlreadyParticipantError,
-                ChatAdminRequiredError,
-                UsersTooMuchError,
-            )
-
             # Try to check invite info first (will often fail if not a member)
             invite_info = await client(functions.messages.CheckChatInviteRequest(hash=hash_part))
             if hasattr(invite_info, "chat") and invite_info.chat:
                 # If we got chat info, we're already a member
                 chat_title = getattr(invite_info.chat, "title", "Unknown Chat")
                 return f"You are already a member of this chat: {chat_title}"
-        except Exception as check_err:
+        except Exception:
             # This often fails if not a member - just continue
             pass
 
@@ -1749,21 +1708,20 @@ async def join_chat_by_link(link: str) -> str:
             if result and hasattr(result, "chats") and result.chats:
                 chat_title = getattr(result.chats[0], "title", "Unknown Chat")
                 return f"Successfully joined chat: {chat_title}"
-            return f"Joined chat via invite hash."
+            return "Joined chat via invite hash."
         except Exception as join_err:
             err_str = str(join_err).lower()
             if "expired" in err_str:
                 return "The invite hash has expired and is no longer valid."
-            elif "invalid" in err_str:
+            if "invalid" in err_str:
                 return "The invite hash is invalid or malformed."
-            elif "already" in err_str and "participant" in err_str:
+            if "already" in err_str and "participant" in err_str:
                 return "You are already a member of this chat."
-            elif "admin" in err_str:
+            if "admin" in err_str:
                 return "Cannot join this chat - requires admin approval."
-            elif "too much" in err_str or "too many" in err_str:
+            if "too much" in err_str or "too many" in err_str:
                 return "Cannot join this chat - it has reached maximum number of participants."
-            else:
-                raise  # Re-raise to be caught by the outer exception handler
+            raise  # Re-raise to be caught by the outer exception handler
     except Exception as e:
         logger.exception(f"join_chat_by_link failed (link={link})")
         return log_and_format_error("join_chat_by_link", e, link=link)
@@ -1814,21 +1772,13 @@ async def import_chat_invite(hash: str) -> str:
 
         # Try checking the invite before joining
         try:
-            from telethon.errors import (
-                InviteHashExpiredError,
-                InviteHashInvalidError,
-                UserAlreadyParticipantError,
-                ChatAdminRequiredError,
-                UsersTooMuchError,
-            )
-
             # Try to check invite info first (will often fail if not a member)
             invite_info = await client(functions.messages.CheckChatInviteRequest(hash=hash))
             if hasattr(invite_info, "chat") and invite_info.chat:
                 # If we got chat info, we're already a member
                 chat_title = getattr(invite_info.chat, "title", "Unknown Chat")
                 return f"You are already a member of this chat: {chat_title}"
-        except Exception as check_err:
+        except Exception:
             # This often fails if not a member - just continue
             pass
 
@@ -1838,21 +1788,20 @@ async def import_chat_invite(hash: str) -> str:
             if result and hasattr(result, "chats") and result.chats:
                 chat_title = getattr(result.chats[0], "title", "Unknown Chat")
                 return f"Successfully joined chat: {chat_title}"
-            return f"Joined chat via invite hash."
+            return "Joined chat via invite hash."
         except Exception as join_err:
             err_str = str(join_err).lower()
             if "expired" in err_str:
                 return "The invite hash has expired and is no longer valid."
-            elif "invalid" in err_str:
+            if "invalid" in err_str:
                 return "The invite hash is invalid or malformed."
-            elif "already" in err_str and "participant" in err_str:
+            if "already" in err_str and "participant" in err_str:
                 return "You are already a member of this chat."
-            elif "admin" in err_str:
+            if "admin" in err_str:
                 return "Cannot join this chat - requires admin approval."
-            elif "too much" in err_str or "too many" in err_str:
+            if "too much" in err_str or "too many" in err_str:
                 return "Cannot join this chat - it has reached maximum number of participants."
-            else:
-                raise  # Re-raise to be caught by the outer exception handler
+            raise  # Re-raise to be caught by the outer exception handler
     except Exception as e:
         logger.exception(f"import_chat_invite failed (hash={hash})")
         return log_and_format_error("import_chat_invite", e, hash=hash)
@@ -2030,9 +1979,7 @@ async def search_messages(chat_id: int, query: str, limit: int = 20) -> str:
         messages = await client.get_messages(entity, limit=limit, search=query)
         return "\n".join([f"ID: {m.id} | {m.date} | {m.message}" for m in messages])
     except Exception as e:
-        return log_and_format_error(
-            "search_messages", e, chat_id=chat_id, query=query, limit=limit
-        )
+        return log_and_format_error("search_messages", e, chat_id=chat_id, query=query, limit=limit)
 
 
 @mcp.tool()
@@ -2062,7 +2009,7 @@ async def mute_chat(chat_id: int) -> str:
             )
         )
         return f"Chat {chat_id} muted."
-    except (ImportError, AttributeError) as type_err:
+    except (ImportError, AttributeError):
         try:
             # Alternative approach directly using raw API
             peer = await client.get_input_entity(chat_id)
@@ -2100,7 +2047,7 @@ async def unmute_chat(chat_id: int) -> str:
             )
         )
         return f"Chat {chat_id} unmuted."
-    except (ImportError, AttributeError) as type_err:
+    except (ImportError, AttributeError):
         try:
             # Alternative approach directly using raw API
             peer = await client.get_input_entity(chat_id)
@@ -2278,22 +2225,21 @@ async def get_bot_info(bot_username: str) -> str:
         if hasattr(result, "to_dict"):
             # Use custom serializer to handle non-serializable types
             return json.dumps(result.to_dict(), indent=2, default=json_serializer)
-        else:
-            # Fallback if to_dict is not available
-            info = {
-                "bot_info": {
-                    "id": entity.id,
-                    "username": entity.username,
-                    "first_name": entity.first_name,
-                    "last_name": getattr(entity, "last_name", ""),
-                    "is_bot": getattr(entity, "bot", False),
-                    "verified": getattr(entity, "verified", False),
-                }
+        # Fallback if to_dict is not available
+        info = {
+            "bot_info": {
+                "id": entity.id,
+                "username": entity.username,
+                "first_name": entity.first_name,
+                "last_name": getattr(entity, "last_name", ""),
+                "is_bot": getattr(entity, "bot", False),
+                "verified": getattr(entity, "verified", False),
             }
-            if hasattr(result, "full_user") and hasattr(result.full_user, "about"):
-                info["bot_info"]["about"] = result.full_user.about
+        }
+        if hasattr(result, "full_user") and hasattr(result.full_user, "about"):
+            info["bot_info"]["about"] = result.full_user.about
 
-            return json.dumps(info, indent=2)
+        return json.dumps(info, indent=2)
     except Exception as e:
         logger.exception(f"get_bot_info failed (bot_username={bot_username})")
         return log_and_format_error("get_bot_info", e, bot_username=bot_username)
@@ -2317,8 +2263,8 @@ async def set_bot_commands(bot_username: str, commands: list) -> str:
             return "Error: This function can only be used by bot accounts. Your current Telegram account is a regular user account, not a bot."
 
         # Import required types
-        from telethon.tl.types import BotCommand, BotCommandScopeDefault
         from telethon.tl.functions.bots import SetBotCommandsRequest
+        from telethon.tl.types import BotCommand, BotCommandScopeDefault
 
         # Create BotCommand objects from the command dictionaries
         bot_commands = [

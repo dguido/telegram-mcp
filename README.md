@@ -126,6 +126,7 @@ Additionally, GIF-related tools (`get_gif_search`, `get_saved_gifs`, `send_gif`)
 
 ## 📋 Requirements
 - Python 3.10+
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
 - [Telethon](https://docs.telethon.dev/)
 - [MCP Python SDK](https://modelcontextprotocol.io/docs/)
 - [Claude Desktop](https://claude.ai/desktop) or [Cursor](https://cursor.so/) (or any MCP client)
@@ -141,18 +142,23 @@ git clone https://github.com/chigwell/telegram-mcp.git
 cd telegram-mcp
 ```
 
-### 2. Create a Virtual Environment
+### 2. Install Dependencies with uv
 
 ```bash
-python3 -m venv .venv
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync dependencies and create virtual environment
+uv sync
+
+# Activate the virtual environment (optional, uv handles this automatically)
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
 ```
 
 ### 3. Generate a Session String
 
 ```bash
-python3 session_string_generator.py
+uv run python session_string_generator.py
 ```
 Follow the prompts to authenticate and update your `.env` file.
 
