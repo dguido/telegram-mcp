@@ -183,10 +183,10 @@ def format_message(message) -> dict[str, Any]:
 
 def get_sender_name(message: Any) -> str:
     """Helper function to get sender name from a message.
-    
+
     Args:
         message: A Telethon Message object.
-        
+
     Returns:
         The sender's name as a string, or "Unknown" if not available.
     """
@@ -203,6 +203,54 @@ def get_sender_name(message: Any) -> str:
         full_name = f"{first_name} {last_name}".strip()
         return full_name if full_name else "Unknown"
     return "Unknown"
+
+
+def truncate_output(
+    content: str,
+    max_chars: int = 30000,
+    data_type: str = "items",
+    total_count: int | None = None,
+) -> str:
+    """Truncate output to prevent exceeding model token limits with clear metadata.
+
+    Args:
+        content: The content to potentially truncate.
+        max_chars: Maximum character limit (default 30000 chars ~= 7500 tokens).
+        data_type: Type of data being truncated (e.g., "contacts", "messages").
+        total_count: Total number of items if known (for better metadata).
+
+    Returns:
+        The original content if under limit, or truncated content with metadata.
+    """
+    if len(content) <= max_chars:
+        return content
+
+    # Count lines/items in the content to show what's being truncated
+    lines = content.split("\n")
+    original_line_count = len(lines)
+
+    # Find a good breakpoint (newline) near the limit
+    suffix_base = "\n\n⚠️  OUTPUT TRUNCATED"
+    if total_count:
+        suffix_base += f"\nTotal {data_type}: {total_count}"
+
+    # Calculate how many lines we can keep
+    kept_chars = 0
+    kept_lines = 0
+    for i, line in enumerate(lines):
+        if kept_chars + len(line) + 1 > max_chars - 500:  # Reserve space for suffix
+            break
+        kept_chars += len(line) + 1
+        kept_lines = i + 1
+
+    truncated_count = original_line_count - kept_lines
+    suffix = suffix_base + f"\nShowing: {kept_lines} {data_type}"
+    suffix += f"\nTruncated: {truncated_count} {data_type}"
+    suffix += "\n\n💡 TIP: Use pagination parameters or filters to see specific data."
+    suffix += "\n💡 For large datasets, consider using export functions or the Telegram app directly."
+
+    # Return the truncated content with metadata
+    return "\n".join(lines[:kept_lines]) + suffix
 
 
 @mcp.tool()
@@ -296,7 +344,7 @@ async def list_contacts() -> str:
             if phone:
                 contact_info += f", Phone: {phone}"
             lines.append(contact_info)
-        return "\n".join(lines)
+        return truncate_output("\n".join(lines), data_type="contacts", total_count=len(users))
     except Exception as e:
         return log_and_format_error("list_contacts", e)
 
@@ -1051,7 +1099,9 @@ async def get_participants(chat_id: int) -> str:
             f"ID: {p.id}, Name: {getattr(p, 'first_name', '')} {getattr(p, 'last_name', '')}"
             for p in participants
         ]
-        return "\n".join(lines)
+        return truncate_output(
+            "\n".join(lines), data_type="participants", total_count=len(participants)
+        )
     except Exception as e:
         return log_and_format_error("get_participants", e, chat_id=chat_id)
 
@@ -1298,7 +1348,10 @@ async def export_contacts() -> str:
     try:
         result = await client(functions.contacts.GetContactsRequest(hash=0))
         users = result.users
-        return json.dumps([format_entity(u) for u in users], indent=2)
+        exported_data = json.dumps([format_entity(u) for u in users], indent=2)
+        return truncate_output(
+            exported_data, data_type="contacts (JSON)", total_count=len(users)
+        )
     except Exception as e:
         return log_and_format_error("export_contacts", e)
 
@@ -1310,7 +1363,10 @@ async def get_blocked_users() -> str:
     """
     try:
         result = await client(functions.contacts.GetBlockedRequest(offset=0, limit=100))
-        return json.dumps([format_entity(u) for u in result.users], indent=2)
+        blocked_data = json.dumps([format_entity(u) for u in result.users], indent=2)
+        return truncate_output(
+            blocked_data, data_type="blocked users", total_count=len(result.users)
+        )
     except Exception as e:
         return log_and_format_error("get_blocked_users", e)
 
@@ -1984,7 +2040,10 @@ async def search_public_chats(query: str) -> str:
     """
     try:
         result = await client(functions.contacts.SearchRequest(q=query, limit=20))
-        return json.dumps([format_entity(u) for u in result.users], indent=2)
+        search_data = json.dumps([format_entity(u) for u in result.users], indent=2)
+        return truncate_output(
+            search_data, data_type="search results", total_count=len(result.users)
+        )
     except Exception as e:
         return log_and_format_error("search_public_chats", e, query=query)
 
@@ -2332,7 +2391,7 @@ async def get_history(chat_id: int, limit: int = 100) -> str:
             lines.append(
                 f"ID: {msg.id} | {sender_name} | Date: {msg.date} | Message: {msg.message}"
             )
-        return "\n".join(lines)
+        return truncate_output("\n".join(lines), data_type="messages", total_count=len(messages))
     except Exception as e:
         return log_and_format_error("get_history", e, chat_id=chat_id, limit=limit)
 
@@ -2414,7 +2473,7 @@ async def get_pinned_messages(chat_id: int) -> str:
                 f"ID: {msg.id} | {sender_name} | Date: {msg.date} | Message: {msg.message or '[Media/No text]'}"
             )
 
-        return "\n".join(lines)
+        return truncate_output("\n".join(lines), data_type="messages", total_count=len(messages))
     except Exception as e:
         logger.exception(f"get_pinned_messages failed (chat_id={chat_id})")
         return log_and_format_error("get_pinned_messages", e, chat_id=chat_id)
