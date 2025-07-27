@@ -207,7 +207,7 @@ def get_sender_name(message: Any) -> str:
 
 def truncate_output(
     content: str,
-    max_chars: int = 30000,
+    max_chars: int = 100000,
     data_type: str = "items",
     total_count: int | None = None,
 ) -> str:
@@ -215,7 +215,7 @@ def truncate_output(
 
     Args:
         content: The content to potentially truncate.
-        max_chars: Maximum character limit (default 30000 chars ~= 7500 tokens).
+        max_chars: Maximum character limit (default 100K chars ~= 25K tokens).
         data_type: Type of data being truncated (e.g., "contacts", "messages").
         total_count: Total number of items if known (for better metadata).
 

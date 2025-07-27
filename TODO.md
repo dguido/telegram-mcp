@@ -43,9 +43,10 @@
 ## Analysis: Output Limits Implementation
 
 ### Current Implementation
-- Added 30K character limit (≈7500 tokens)
+- Added 100K character limit (≈25K tokens) - optimized for Anthropic's latest models
 - Truncates at newlines when possible
-- Shows "... [Output truncated]" indicator
+- Shows clear metadata with total items, shown items, and truncated count
+- Provides helpful tips about using pagination or alternative approaches
 
 ### Pros
 - Non-breaking change

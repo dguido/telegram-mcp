@@ -40,6 +40,7 @@ This is a Telegram integration for Claude via the Model Context Protocol (MCP), 
 - Type checking with `ty` shows 16 errors (mostly related to optional types and Telethon API)
 - Some Telethon methods may be version-specific (e.g., SearchGifsRequest)
 - File-related tools have been removed due to MCP environment limitations
+- Output truncation is set to 100K chars (optimized for Anthropic's latest models)
 
 ### Common Commands
 ```bash
