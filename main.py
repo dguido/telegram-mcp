@@ -53,8 +53,14 @@ if SESSION_STRING:
     # Use the string session if available
     client = TelegramClient(StringSession(SESSION_STRING), TELEGRAM_API_ID, TELEGRAM_API_HASH)
 else:
-    # Use file-based session
-    client = TelegramClient(TELEGRAM_SESSION_NAME, TELEGRAM_API_ID, TELEGRAM_API_HASH)
+    # Use file-based session with proper directory
+    # Create sessions directory if it doesn't exist
+    session_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
+    os.makedirs(session_dir, exist_ok=True)
+
+    # Use the session name with the sessions directory
+    session_path = os.path.join(session_dir, TELEGRAM_SESSION_NAME)
+    client = TelegramClient(session_path, TELEGRAM_API_ID, TELEGRAM_API_HASH)
 
 # Setup robust logging with both file and console output
 logger = logging.getLogger("telegram_mcp")
@@ -183,10 +189,10 @@ def format_message(message) -> dict[str, Any]:
 
 def get_sender_name(message: Any) -> str:
     """Helper function to get sender name from a message.
-    
+
     Args:
         message: A Telethon Message object.
-        
+
     Returns:
         The sender's name as a string, or "Unknown" if not available.
     """

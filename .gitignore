@@ -182,6 +182,8 @@ anon_new.session
 anon_new.session-journal
 *.session.sql
 *.session.sql-journal
+telegram_sessions/
+sessions/
 
 # Claude Desktop config
 claude_desktop_config.json
