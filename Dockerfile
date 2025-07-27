@@ -42,5 +42,8 @@ ENV TELEGRAM_SESSION_STRING=""
 # Expose any ports if the application were a web server (not needed for stdio MCP)
 # EXPOSE 8000
 
+# Create a volume for session persistence
+VOLUME ["/app/sessions"]
+
 # Define the command to run the application
 CMD ["python", "main.py"] 

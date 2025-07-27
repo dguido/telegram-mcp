@@ -216,8 +216,31 @@ docker run -it --rm \
   telegram-mcp:latest
 ```
 *   Replace placeholders with your actual credentials.
-*   Use `-e TELEGRAM_SESSION_NAME=your_session_file_name` instead of `TELEGRAM_SESSION_STRING` if you prefer file-based sessions (requires volume mounting, see `docker-compose.yml` for an example).
+*   Use `-e TELEGRAM_SESSION_NAME=your_session_file_name` instead of `TELEGRAM_SESSION_STRING` if you prefer file-based sessions (requires volume mounting, see below).
 *   The `-it` flags are crucial for interacting with the server.
+
+**Session Persistence with Docker:**
+
+When using file-based sessions (not `TELEGRAM_SESSION_STRING`), you'll want to persist the session file between container restarts:
+
+1. **Using Docker Compose (Recommended):**
+   The `docker-compose.yml` file already includes volume mounting:
+   ```yaml
+   volumes:
+     - ./telegram_sessions:/app/sessions
+   ```
+   This will create a `telegram_sessions` directory in your project folder to store session files.
+
+2. **Using Docker Run:**
+   Add volume mounting to your docker run command:
+   ```bash
+   docker run -it --rm \
+     -v ./telegram_sessions:/app/sessions \
+     -e TELEGRAM_API_ID="YOUR_API_ID" \
+     -e TELEGRAM_API_HASH="YOUR_API_HASH" \
+     -e TELEGRAM_SESSION_NAME="my_session" \
+     telegram-mcp:latest
+   ```
 
 ---
 
